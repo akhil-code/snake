@@ -1,6 +1,6 @@
 from neural import NeuralNetwork
 from numpy import random, copy
-from attrib import Snake
+from objects import Snake
 
 class Individual:
     def __init__(self, layers=None, weights=None):
