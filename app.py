@@ -2,8 +2,7 @@ import pygame
 from attrib import Game
 
 def main():
-    screen, clock, population = Game.initialize()
-    Game.loop(screen, clock, population)
+    Game.get_instance().loop()
     pygame.quit()
 
 if __name__=='__main__':

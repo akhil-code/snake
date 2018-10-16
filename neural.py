@@ -22,9 +22,3 @@ class NeuralNetwork:
             print(l)
         self.y = l
         return self.y
-
-if __name__ == '__main__':
-    layers = (4, 24, 24, 4)
-    ann = Neural(layers=layers)
-    X = random.rand(4, 1)
-    y = ann.feed_forward(X)

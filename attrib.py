@@ -1,66 +1,75 @@
 import pygame
-from numpy import random, array, reshape
+from numpy import array, random, reshape
+
 from genetic import Population
-from objects import Snake, Color, Ground
+from objects import Color, Direction, Ground, Snake
 
 
 class Game:
-    FRAME_RATE = 120        # FPS
-    FRAMES = 0              # counts number of frames elapsed
-    TITLE = 'Snake'         # Window Title
-    EXIT = False            # Flag to exit the game
-    ICON_PATH = 'res/icon.png'
-    MANUAL = True
+    __instance__ = None
+
+    def get_instance():
+        if Game.__instance__ == None:
+            Game()
+        return Game.__instance__
 
     def __init__(self):
-        pass
+        self.frame_rate = 20        # FPS
+        self.frames = 0              # counts number of frames elapsed
+        self.exit = False            # Flag to exit the game
+        self.manual = True
+        title = 'Snake'         # Window Title
+        icon_filename = 'res/icon.png'
 
-    def initialize():
+        # loads pygame modules
         pygame.init()
 
         # initializing game objects
-        population = Population(layers=(24,24,24,4))
+        self.population = Population(layers=(24,24,24,4))
 
         # screen params
-        icon = pygame.image.load(Game.ICON_PATH)
+        icon = pygame.image.load(icon_filename)
         pygame.display.set_icon(icon)
-        pygame.display.set_caption(Game.TITLE)
-        screen = pygame.display.set_mode(Ground.get_dimensions())
+        pygame.display.set_caption(title)
+        self.screen = pygame.display.set_mode(Ground.get_instance().get_dimensions())
     
         # reference clock
-        clock = pygame.time.Clock()
+        self.clock = pygame.time.Clock()
 
-        return screen, clock, population
+        Game.__instance__ = self
     
-    def loop(screen, clock, population):
-        while not Game.EXIT:
-            # update objects for each frame
-            Game.update_objects(clock)
-            # capture user input
-            Game.capture_input(population)
-            # draw objects on screen
-            Game.draw_objects()
+    def loop(self):
+        for individual in self.population.individuals:
+            snake = individual.snake
+            while not self.exit:
+                # update objects for each frame
+                self.update_objects(snake)
+                # capture user input
+                self.capture_input(snake)
+                # draw objects on screen
+                self.draw_objects(snake)
 
     
-    def update_objects(clock):
-        clock.tick(Game.FRAME_RATE)
+    def update_objects(self, snake):
+        self.clock.tick(self.frame_rate)
+        snake.update()
     
-    def capture_input(population):
-        snake = population.individuals[0].snake
+    def capture_input(self, snake):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                Game.EXIT = True
+                self.exit = True
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_UP:
-                    snake.move_up()
+                    snake.move(Direction.UP)
                 elif event.key == pygame.K_DOWN:
-                    snake.move_down()
+                    snake.move(Direction.DOWN)
                 elif event.key == pygame.K_LEFT:
-                    snake.move_left()
+                    snake.move(Direction.LEFT)
                 elif event.key == pygame.K_RIGHT:
-                    snake.move_right()
+                    snake.move(Direction.RIGHT)
 
-    def draw_objects():
-        pass
-
-
+    def draw_objects(self, snake):
+        self.screen.fill(Color.BLACK)
+        snake.draw(self.screen)
+        pygame.display.update()
+        

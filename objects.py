@@ -1,11 +1,23 @@
-from numpy import array
+from numpy import array, random
 from enum import Enum
+import pygame
 
 class Direction(Enum):
     LEFT = 0
     RIGHT = 1
     UP = 2
     DOWN = 3
+
+    def get_opposite_direction(direction):
+        if direction == Direction.UP:
+            return Direction.DOWN
+        elif direction == Direction.DOWN:
+            return Direction.UP
+        elif direction == Direction.LEFT:
+            return Direction.RIGHT
+        elif direction == Direction.RIGHT:
+            return Direction.LEFT
+
 
 class Color:
     RED = (255,0,0)
@@ -15,17 +27,25 @@ class Color:
     YELLOW = (255,255,0)
     BLACK = (0,0,0)
 
-    colors = array([RED, GREEN, BLUE, WHITE, YELLOW])
 
 class Snake:
     def __init__(self):
         self.score = 0
         self.head = None
+        self.game_over = False
     
         # body is a list of parts
         # part = (origin, direction, length)
-        board_center = None
-        self.body = [ (board_center, Direction.UP, 4) ]
+        ground = Ground.get_instance()
+        board_center = (ground.columns/2, ground.rows/2)
+
+        self.body = [
+            {
+                'origin' : board_center,
+                'direction' : Direction.UP,
+                'length' : 40,
+            },
+        ]
     
     def update(self):
         # if body.size() == 1 then shift origin in that direction
@@ -39,35 +59,41 @@ class Snake:
             self.body[0] = self.shift_origin(head)
         else:
             # increase size of head by 1
-            self.body[0][2] += 1
+            self.body[0]['length'] += 1
             # decrease size of tail by 1
-            self.body[-1][2] -= 1
+            self.body[-1]['length'] -= 1
+            # shift origin of last part by one unit
+            self.body[-1] = self.shift_origin(self.body[-1])
             # if tail length is zero, then delete it
-            if self.body[-1][2] <= 0:
+            if self.body[-1]['length'] <= 0:
                 del self.body[-1]
+
     
     def shift_origin(self, part):
-        origin = part[0]
-        x = origin[0]
-        y = origin[1]
-        direction = part[1]
-        length = part[2]
+        x_, y_ = part['origin']
+        direction = part['direction']
+        length = part['length']
 
         if direction == Direction.LEFT:
-            origin = (x-1, y)
+            origin = (x_-1, y_)
         elif direction == Direction.RIGHT:
-            origin = (x+1, y)
+            origin = (x_+1, y_)
         elif direction == Direction.UP:
-            origin = (x, y-1)
+            origin = (x_, y_-1)
         elif direction == Direction.DOWN:
-            origin = (x, y+1)
+            origin = (x_, y_+1)
 
-        return (origin, direction, length)
+        new_part = {
+            'origin' : origin,
+            'direction' : direction,
+            'length' : length,
+        }
+        return new_part
     
     def consume_food(self):
         # first index for body part
         # second index for length of first body part i.e head
-        self.body[0][2] += 1
+        self.body[0]['length'] += 1
 
 
     def move(self, new_direction):
@@ -75,37 +101,95 @@ class Snake:
         # else add new part at the start of list
         # new part = (find_end_point(previous-head), new-direction, 0)
         head = self.body[0]
-        if head[1] == new_direction:
+        is_same_direction = (head['direction'] == new_direction)
+        is_opposite_direction =  new_direction == Direction.get_opposite_direction(head['direction'])
+        
+        if is_same_direction or is_opposite_direction:
             return
         else:
-            part = (self.find_end_point(head), new_direction, 0)
+            part = {
+                'origin' : self.find_end_point(head, delta=1),
+                'direction' : new_direction,
+                'length' : 0,
+            }
             self.body = [part] + self.body
     
-    def find_end_point(self, part):
-        origin = part[0]
-        x = origin[0]
-        y = origin[1]
-        length = part[2]
-        direction = part[1]
+    def find_end_point(self, part, delta=0):
+        x_, y_ = part['origin']
+        length = part['length']
+        direction = part['direction']
+
         if direction == Direction.LEFT:
-            v = (x-length, y)
+            v = (x_ - length - delta, y_)
         elif direction == Direction.RIGHT:
-            v = (x+length, y)
+            v = (x_ + length + delta, y_)
         elif direction == Direction.UP:
-            v = (x, y-length)
+            v = (x_, y_ - length - delta)
         elif direction == Direction.DOWN:
-            v = (x, y+length)    
+            v = (x_, y_ + length + delta)    
 
         return v
     
+    def draw(self, screen):
+        for part in self.body:
+            p1 = part['origin']
+            p2 = self.find_end_point(part)
+            rect = Ground.get_instance().get_rect(p1, p2)
+            pygame.draw.rect(screen, Color.WHITE, rect)
+    
 
 class Ground:
-    WIDTH = 640                     # width of screen
-    HEIGHT = 480                    # height of screen
-    BOX_WIDTH = 5                   # width of each box on screen
+    __instance__ = None
 
-    ROWS = HEIGHT / BOX_WIDTH
-    COLUMNS = WIDTH / BOX_WIDTH
+    def __init__(self):
+        self.width = 640
+        self.height = 480
+        self.box_width = 5
+        self.rows = self.height / self.box_width
+        self.columns = self.width /self.box_width
 
-    def get_dimensions():
-        return (Ground.WIDTH, Ground.HEIGHT)
+        Ground.__instance__ = self
+
+    def get_instance():
+        if Ground.__instance__ == None:
+            Ground()
+        return Ground.__instance__
+
+    def get_dimensions(self):
+        return (self.width, self.height)
+    
+    def get_rect(self, p1, p2):
+        x1_, y1_ = p1
+        x2_, y2_ = p2
+        if x1_ == x2_:
+            left = x1_* self.box_width
+            top = min((y1_, y2_)) * self.box_width
+            width = self.box_width
+            height = abs(y1_-y2_) * self.box_width
+        elif y1_ == y2_:
+            left = min((x1_, x2_)) * self.box_width
+            top = y1_ * self.box_width
+            width = abs(x1_ - x2_) * self.box_width
+            height = self.box_width
+
+        return pygame.Rect(left, top, width, height)
+
+
+class Food:
+    __instance__ = None
+
+    def __init__(self):
+        Food.__instance__ = self
+
+    def get_instance():
+        if Food.__instance__ == None:
+            Food()
+        return Food.__instance__
+
+    def get_new_position(self):
+        ground = Ground.get_instance()
+        x_ = random.randint(0, high=ground.width)
+        y_ = random.randint(0, high=ground.height)
+        
+        return (x_, y_)
+    
