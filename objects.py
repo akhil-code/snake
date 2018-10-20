@@ -1,7 +1,10 @@
 from enum import Enum
 
 import pygame
-from numpy import array, int32, random, zeros
+import operator
+import math
+from math import pow, sqrt, cos
+from numpy import array, int32, random, zeros, NINF, Inf
 
 
 class Direction(Enum):
@@ -51,7 +54,6 @@ class Color:
 class Snake:
     def __init__(self):
         self.score = 0
-        self.head = None
         self.game_over = False
     
         # body is a list of parts
@@ -62,47 +64,69 @@ class Snake:
             {
                 'origin' : board_center,
                 'direction' : Direction.UP,
-                'length' : 30,
+                'length' : 40,
             },
         ]
+
+        # marking all points on ground's grid
+        points = self.find_all_points(self.body[0])
+        for point in points:
+            self.mark_ground(point, 1)
     
+    def create_part(self, origin, direction, length):
+        part = {
+            'origin' : origin,
+            'direction' : direction, 
+            'length' : length,
+        }
+        return part
+
     def update(self):
         # if body.size() == 1 then shift origin in that direction
         # if body.size > 1 then 
         #   - increase size of head by 1
         #   - decrease size of tail by 1
-        #       - if length of tail == 0 then delete tail
+        #       - if length of tail == 0, then delete tail
+        
         body_size = len(self.body)
+        # marking ground before moving
+        self.mark_ground(self.body[-1]['origin'], 0)
+
         if body_size == 1:
             head = self.body[0]
             self.body[0] = self.shift_origin(head)
+            self.mark_ground((self.find_end_point(self.body[0])), 0)
+            self.mark_ground((self.find_end_point(self.body[0])), 1)
         else:
             self.increase_head_length()
             self.decrease_tail_length()
-    
+        
+        # marking ground after moving
+        self.mark_ground((self.find_end_point(self.body[0])), 1)
+        # print(self.find_distances_from_walls())
+        print(self.find_distances_from_body())
+
+    def consume_food(self):
+        # first index for body's head
+        self.body[0]['length'] += 1
+
     def increase_head_length(self):
         # increase size of head by 1
         self.body[0]['length'] += 1
-        # next_x_, next_y_ = self.find_end_point(self.body[0], delta=1)
     
     def decrease_tail_length(self):
         # decrease size of tail by 1
         self.body[-1]['length'] -= 1
-        # reset ground to 0
-        # x_, y_ = self.body[-1]['origin']
-        # self.ground.grid[y_][x_] = 0
         # shift origin of last part by one unit
         self.body[-1] = self.shift_origin(self.body[-1])
         # if tail length is zero, then delete it
         if self.body[-1]['length'] <= 0:
             del self.body[-1]
-
     
     def shift_origin(self, part):
         x_, y_ = part['origin']
         direction = part['direction']
         length = part['length']
-
 
         if direction == Direction.LEFT:
             origin = (x_-1, y_)
@@ -115,34 +139,6 @@ class Snake:
 
         new_part = self.create_part(origin, direction, length)
         return new_part
-    
-    def consume_food(self):
-        # first index for body's head
-        self.body[0]['length'] += 1
-
-    def create_part(self, origin, direction, length):
-        part = {
-            'origin' : origin,
-            'direction' : direction, 
-            'length' : length,
-        }
-        return part
-
-    def move(self, new_direction):
-        # if new-direction == head-direction then return
-        # else add new part at the start of list
-        # new part = (find_end_point(previous-head), new-direction, 0)
-        head = self.body[0]
-        is_same_direction = (head['direction'] == new_direction)
-        is_opposite_direction =  (new_direction == Direction.get_opposite_direction(head['direction']))
-        
-        if is_same_direction or is_opposite_direction:
-            return
-        else:
-            end_point = self.find_end_point(head)
-            new_head = self.create_part(end_point, new_direction, 1)
-            self.body[0]['length'] -= 1
-            self.body = [new_head] + self.body
     
     def find_end_point(self, part):
         x_, y_ = part['origin']
@@ -160,12 +156,137 @@ class Snake:
 
         return v
     
+    def find_all_points(self, part):
+        x_, y_ = part['origin']
+        length = part['length']
+        direction = part['direction']
+
+        # stores array of points
+        points = []
+
+        # creates points array
+        for i in range(length):
+            if direction == Direction.LEFT:
+                point = (x_ - i, y_)
+            elif direction == Direction.RIGHT:
+                point = (x_ + i, y_)
+            elif direction == Direction.UP:
+                point = (x_, y_ - 1)
+            elif direction == Direction.DOWN:
+                point = (x_, y_ + 1)
+            points.append(point)
+
+        return points
+
+    def find_distances_from_body(self):
+        head_point = self.find_end_point(self.body[0])
+        normalisation_factor = sqrt(pow(self.ground.rows, 2) + pow(self.ground.columns, 2))
+
+        distances = []
+
+        deltax = (-1, -1, -1, 0, 0, 1, 1, 1)
+        deltay = (-1, 0, 1, -1, 1, -1, 0, 1)
+
+        for i in range(len(deltax)):
+            dist = self.find_distance_from_body_in_direction(head_point, deltax[i], deltay[i])
+            dist /= normalisation_factor
+            distances.append(dist)
+        
+        return tuple(distances)
+
+    def find_distance_from_body_in_direction(self, point, deltax, deltay):
+        x_, y_ = point
+
+        # base case
+        if not (x_ >= 0 and y_ >= 0 and x_ < self.ground.columns and y_ < self.ground.rows):
+            return NINF
+
+        count = 0
+        hit_body = False
+        while self.ground.is_inside_grid(x_, y_):
+            count += 1
+            x_ += deltax
+            y_ += deltay
+            if self.ground.is_inside_grid(x_, y_) and self.ground.grid[y_][x_] == 1:
+                hit_body = True
+                break
+
+        # if body doesn't come in way
+        if not hit_body:
+            return Inf
+
+        # if diagnal direction
+        if abs(deltax) == 1 and abs(deltay) == 1:
+            return count * sqrt(2)
+        
+        return count
+
+
+    def find_distances_from_walls(self):
+        head = self.body[0]
+        head_point = self.find_end_point(head)
+        normalisation_factor = sqrt(pow(self.ground.rows, 2) + pow(self.ground.columns, 2))
+
+        distances = []
+
+        deltax = (-1, -1, -1, 0, 0, 1, 1, 1)
+        deltay = (-1, 0, 1, -1, 1, -1, 0, 1)
+
+        for i in range(len(deltax)):
+            dist = self.find_distance_from_wall_in_direction(head_point, deltax[i], deltay[i])
+            dist /= normalisation_factor
+            distances.append(dist)
+        
+        return tuple(distances)
+
+    def find_distance_from_wall_in_direction(self, point, deltax, deltay):
+        x_, y_ = point
+
+        if not self.ground.is_inside_grid(x_, y_):
+            return NINF
+
+        count = 0
+        while self.ground.is_inside_grid(x_, y_):
+            count += 1
+            x_ += deltax
+            y_ += deltay
+
+        count -= 1
+
+        # if diagnal direction
+        if abs(deltax) == 1 and abs(deltay) == 1:
+            return count * sqrt(2)
+        
+        return count
+
+
+
+    def move(self, new_direction):
+        # if new-direction == head-direction then return
+        # else add new part at the start of list
+        # new part = (find_end_point(previous-head), new-direction, 0)
+        head = self.body[0]
+        is_same_direction = (head['direction'] == new_direction)
+        is_opposite_direction =  (new_direction == Direction.get_opposite_direction(head['direction']))
+        
+        if is_same_direction or is_opposite_direction:
+            return
+        else:
+            end_point = self.find_end_point(head)
+            new_head = self.create_part(end_point, new_direction, 1)
+            self.body[0]['length'] -= 1
+            self.body = [new_head] + self.body
+    
     def draw(self, screen):
         for part in self.body:
             p1 = part['origin']
             p2 = self.find_end_point(part)
             rect = self.ground.get_rect(p1, p2)
             pygame.draw.rect(screen, Color.WHITE, rect)
+    
+    def mark_ground(self, point, value):
+        x_, y_ = point
+        self.ground.grid[y_][x_] = value
     
 
 class Ground:
@@ -204,6 +325,9 @@ class Ground:
             height = self.box_width
 
         return pygame.Rect(left, top, width, height)
+    
+    def is_inside_grid(self, x_, y_):
+        return (x_ >= 0 and y_ >= 0 and x_ < self.columns and y_ < self.rows)
 
 
 class Food:
@@ -219,7 +343,15 @@ class Food:
 
     def get_new_position(self):
         ground = Ground.get_instance()
-        x_ = random.randint(0, high=ground.width)
-        y_ = random.randint(0, high=ground.height)
+
+        while True:
+            x_ = random.randint(0, high=ground.width)
+            y_ = random.randint(0, high=ground.height)
+            if ground.grid[y_][x_] == 0:
+                break
         
+        self.x_, self.y_ = x_, y_
         return (x_, y_)
+    
+    def get_current_position(self):
+        return (self.x_, self.y_)

@@ -14,7 +14,7 @@ class Game:
         return Game.__instance__
 
     def __init__(self):
-        self.frame_rate = 20         # FPS
+        self.frame_rate = 2         # FPS
         self.frames = 0              # counts number of frames elapsed
         self.exit = False            # Flag to exit the game
         self.manual = True
