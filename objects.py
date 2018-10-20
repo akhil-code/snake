@@ -1,10 +1,10 @@
+import math
+import operator
 from enum import Enum
+from math import cos, pow, sqrt
 
 import pygame
-import operator
-import math
-from math import pow, sqrt, cos
-from numpy import array, int32, random, zeros, NINF, Inf
+from numpy import NINF, Inf, any, array, int32, random, zeros
 
 
 class Direction(Enum):
@@ -57,14 +57,16 @@ class Snake:
         self.game_over = False
     
         # body is a list of parts
-        self.ground = Ground.get_instance()
+        self.ground = Ground()
+        
+
         board_center = (int(self.ground.columns/2), int(self.ground.rows/2))
 
         self.body = [
             {
                 'origin' : board_center,
                 'direction' : Direction.UP,
-                'length' : 40,
+                'length' : 20,
             },
         ]
 
@@ -72,6 +74,9 @@ class Snake:
         points = self.find_all_points(self.body[0])
         for point in points:
             self.mark_ground(point, 1)
+        
+        self.food = Food()
+        self.food.get_new_position(self.ground)
     
     def create_part(self, origin, direction, length):
         part = {
@@ -95,23 +100,24 @@ class Snake:
         if body_size == 1:
             head = self.body[0]
             self.body[0] = self.shift_origin(head)
-            self.mark_ground((self.find_end_point(self.body[0])), 0)
-            self.mark_ground((self.find_end_point(self.body[0])), 1)
         else:
             self.increase_head_length()
             self.decrease_tail_length()
         
         # marking ground after moving
         self.mark_ground((self.find_end_point(self.body[0])), 1)
-        # print(self.find_distances_from_walls())
-        print(self.find_distances_from_body())
+
+        # find distances (features)
+        self.find_distances_from_walls()
+        self.find_distances_from_body()
+        self.find_distances_from_food()
 
     def consume_food(self):
         # first index for body's head
         self.body[0]['length'] += 1
 
     def increase_head_length(self):
-        # increase size of head by 1
+        # increase size of head by 1d
         self.body[0]['length'] += 1
     
     def decrease_tail_length(self):
@@ -171,12 +177,57 @@ class Snake:
             elif direction == Direction.RIGHT:
                 point = (x_ + i, y_)
             elif direction == Direction.UP:
-                point = (x_, y_ - 1)
+                point = (x_, y_ - i)
             elif direction == Direction.DOWN:
-                point = (x_, y_ + 1)
+                point = (x_, y_ + i)
             points.append(point)
 
         return points
+
+    def find_distances_from_food(self):
+        head_point = self.find_end_point(self.body[0])
+        normalisation_factor = sqrt(pow(self.ground.rows, 2) + pow(self.ground.columns, 2))
+
+        distances = []
+
+        deltax = (-1, -1, -1, 0, 0, 1, 1, 1)
+        deltay = (-1, 0, 1, -1, 1, -1, 0, 1)
+
+        for i in range(len(deltax)):
+            dist = self.find_distance_from_food_in_direction(head_point, deltax[i], deltay[i])
+            dist /= normalisation_factor
+            distances.append(dist)
+        
+        distances = array(distances)
+        return distances
+    
+    def find_distance_from_food_in_direction(self, point, deltax, deltay):
+        x_, y_ = point
+
+        # base case
+        if not (x_ >= 0 and y_ >= 0 and x_ < self.ground.columns and y_ < self.ground.rows):
+            return NINF
+        
+        count = 0
+        hit_food = False
+        while self.ground.is_inside_grid(x_, y_):
+            count += 1
+            x_ += deltax
+            y_ += deltay
+            if self.ground.is_inside_grid(x_, y_) and self.food.get_current_position() == (x_, y_):
+                hit_food = True
+                break
+
+        # if body doesn't come in way
+        if not hit_food:
+            return Inf
+
+        # if diagnal direction
+        if abs(deltax) == 1 and abs(deltay) == 1:
+            return count * sqrt(2)
+        
+        return count
+    
 
     def find_distances_from_body(self):
         head_point = self.find_end_point(self.body[0])
@@ -192,7 +243,8 @@ class Snake:
             dist /= normalisation_factor
             distances.append(dist)
         
-        return tuple(distances)
+        distances = array(distances)
+        return distances
 
     def find_distance_from_body_in_direction(self, point, deltax, deltay):
         x_, y_ = point
@@ -236,8 +288,13 @@ class Snake:
             dist = self.find_distance_from_wall_in_direction(head_point, deltax[i], deltay[i])
             dist /= normalisation_factor
             distances.append(dist)
+        distances = array(distances)
         
-        return tuple(distances)
+        is_outside = (distances == NINF)
+        if any(is_outside):
+            self.game_over = True
+
+        return distances
 
     def find_distance_from_wall_in_direction(self, point, deltax, deltay):
         x_, y_ = point
@@ -278,6 +335,12 @@ class Snake:
             self.body = [new_head] + self.body
     
     def draw(self, screen):
+        # draw food
+        point = self.food.get_current_position()
+        rect = self.ground.get_rect(point, point)
+        pygame.draw.rect(screen, Color.RED, rect)
+
+        # draw snake's parts
         for part in self.body:
             p1 = part['origin']
             p2 = self.find_end_point(part)
@@ -286,26 +349,23 @@ class Snake:
     
     def mark_ground(self, point, value):
         x_, y_ = point
-        self.ground.grid[y_][x_] = value
+
+        if self.ground.is_inside_grid(x_, y_):
+            if value == 1 and self.ground.grid[y_][x_] == 1:
+                self.game_over = True
+            self.ground.grid[y_][x_] = value
     
 
 class Ground:
-    __instance__ = None
 
     def __init__(self):
         self.width = 640
         self.height = 480
-        self.box_width = 5
+        self.box_width = 10
         self.rows = int(self.height / self.box_width)
         self.columns = int(self.width /self.box_width)
         self.grid = zeros((self.rows, self.columns), dtype=int32)
 
-        Ground.__instance__ = self
-
-    def get_instance():
-        if Ground.__instance__ == None:
-            Ground()
-        return Ground.__instance__
 
     def get_dimensions(self):
         return (self.width, self.height)
@@ -328,25 +388,24 @@ class Ground:
     
     def is_inside_grid(self, x_, y_):
         return (x_ >= 0 and y_ >= 0 and x_ < self.columns and y_ < self.rows)
+    
+    def reset_grid(self):
+        self.grid = zeros((self.rows, self.columns), dtype=int32)
+    
+    def print_grid(self):
+        for i in range(self.rows):
+            for j in range(self.columns):
+                print(self.grid[i][j], end=" ")
+            print("")
+        print("\n\n\n")
+
 
 
 class Food:
-    __instance__ = None
-
-    def __init__(self):
-        Food.__instance__ = self
-
-    def get_instance():
-        if Food.__instance__ == None:
-            Food()
-        return Food.__instance__
-
-    def get_new_position(self):
-        ground = Ground.get_instance()
-
+    def get_new_position(self, ground):
         while True:
-            x_ = random.randint(0, high=ground.width)
-            y_ = random.randint(0, high=ground.height)
+            x_ = random.randint(0, high=ground.columns)
+            y_ = random.randint(0, high=ground.rows)
             if ground.grid[y_][x_] == 0:
                 break
         

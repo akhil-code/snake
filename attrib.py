@@ -14,7 +14,7 @@ class Game:
         return Game.__instance__
 
     def __init__(self):
-        self.frame_rate = 2         # FPS
+        self.frame_rate = 20         # FPS
         self.frames = 0              # counts number of frames elapsed
         self.exit = False            # Flag to exit the game
         self.manual = True
@@ -31,7 +31,7 @@ class Game:
         icon = pygame.image.load(icon_filename)
         pygame.display.set_icon(icon)
         pygame.display.set_caption(title)
-        self.screen = pygame.display.set_mode(Ground.get_instance().get_dimensions())
+        self.screen = pygame.display.set_mode(Ground().get_dimensions())
     
         # reference clock
         self.clock = pygame.time.Clock()
@@ -41,7 +41,7 @@ class Game:
     def loop(self):
         for individual in self.population.individuals:
             snake = individual.snake
-            while not self.exit:
+            while not self.exit and not snake.game_over:
                 # update objects for each frame
                 self.update_objects(snake)
                 # capture user input
