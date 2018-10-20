@@ -6,7 +6,8 @@ class NeuralNetwork:
             self.weights = []
             self.number_of_layers = len(layers)
             for i in range(len(layers) - 1):
-                w = random.rand(layers[i], layers[i+1])
+                # w = random.rand(layers[i], layers[i+1])
+                w = random.randn(layers[i], layers[i+1]) * 0.01
                 self.weights.append(w)
         else:
             self.weights = weights
