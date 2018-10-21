@@ -4,8 +4,9 @@ from enum import Enum
 from math import cos, pow, sqrt
 
 import pygame
-from numpy import NINF, Inf, any, array, int32, random, zeros
+from numpy import any, array, int32, random, zeros, concatenate, reshape, ravel
 
+MAX_VALUE = 3200
 
 class Direction(Enum):
     LEFT = 0
@@ -22,6 +23,9 @@ class Direction(Enum):
             return Direction.RIGHT
         elif direction == Direction.RIGHT:
             return Direction.LEFT
+    
+    def get_all_directions():
+        return (Direction.LEFT, Direction.RIGHT, Direction.UP, Direction.DOWN)
 
 
 class Color:
@@ -54,10 +58,12 @@ class Color:
 class Snake:
     def __init__(self):
         self.score = 0
+        self.time = 0
         self.game_over = False
     
         # body is a list of parts
         self.ground = Ground()
+        self.normalisation_factor = sqrt(pow(self.ground.rows, 2) + pow(self.ground.columns, 2))
         
 
         board_center = (int(self.ground.columns/2), int(self.ground.rows/2))
@@ -66,7 +72,7 @@ class Snake:
             {
                 'origin' : board_center,
                 'direction' : Direction.UP,
-                'length' : 20,
+                'length' : 5,
             },
         ]
 
@@ -77,7 +83,13 @@ class Snake:
         
         self.food = Food()
         self.food.get_new_position(self.ground)
+        self.closest_distance = [self.normalisation_factor]
+
     
+    def reset(self):
+        self.__init__()
+
+
     def create_part(self, origin, direction, length):
         part = {
             'origin' : origin,
@@ -93,6 +105,7 @@ class Snake:
         #   - decrease size of tail by 1
         #       - if length of tail == 0, then delete tail
         
+        self.time += 1
         body_size = len(self.body)
         # marking ground before moving
         self.mark_ground(self.body[-1]['origin'], 0)
@@ -107,17 +120,59 @@ class Snake:
         # marking ground after moving
         self.mark_ground((self.find_end_point(self.body[0])), 1)
 
-        # find distances (features)
-        self.find_distances_from_walls()
-        self.find_distances_from_body()
-        self.find_distances_from_food()
+        head_point = self.find_end_point(self.body[0])
+        self.closest_distance[-1] = self.find_distance(head_point, self.food.get_current_position())
 
-    def consume_food(self):
+        if self.consumed_food():
+            self.score += 1
+            for i in range(2):
+                self.body[0]['length'] += 1
+                self.mark_ground((self.find_end_point(self.body[0])), 1)
+            self.food.get_new_position(self.ground)
+            self.closest_distance.append(self.normalisation_factor)
+
+        # find distances (features)
+        head_point = self.find_end_point(self.body[0])
+        if not self.ground.is_inside_grid(*head_point):
+            self.game_over = True
+            return
+
+        self.features = concatenate((self.get_normalised_coordinates(), self.get_food_features(), self.find_distances_from_body()))
+    
+    def find_distance(self, p1, p2):
+        x1, y1 = p1
+        x2, y2 = p2
+        return sqrt(pow(x1-x2, 2) + pow(y1-y2, 2))
+
+    def get_normalised_coordinates(self):
+        # position
+        head = self.body[0]
+        head_point_feature = self.find_end_point(head)
+        head_point_feature = array(head_point_feature)
+        head_point_feature = head_point_feature / self.normalisation_factor
+        head_point_feature = reshape(head_point_feature, (2, 1))
+
+        # direction
+        direction_feature = [0, 0, 0, 0]
+        direction_feature[head['direction'].value] = 1
+        direction_feature = array(direction_feature)
+        direction_feature = reshape(direction_feature, (4, 1))
+        return concatenate((head_point_feature, direction_feature))
+
+
+    def get_features(self):
+        return self.features
+
+    def consumed_food(self):
         # first index for body's head
-        self.body[0]['length'] += 1
+        head = self.body[0]
+        head_point = self.find_end_point(head)
+        if head_point == self.food.get_current_position():
+            return True
+        return False
 
     def increase_head_length(self):
-        # increase size of head by 1d
+        # increase size of head by 1
         self.body[0]['length'] += 1
     
     def decrease_tail_length(self):
@@ -186,19 +241,14 @@ class Snake:
 
     def find_distances_from_food(self):
         head_point = self.find_end_point(self.body[0])
-        normalisation_factor = sqrt(pow(self.ground.rows, 2) + pow(self.ground.columns, 2))
-
-        distances = []
 
         deltax = (-1, -1, -1, 0, 0, 1, 1, 1)
         deltay = (-1, 0, 1, -1, 1, -1, 0, 1)
 
-        for i in range(len(deltax)):
-            dist = self.find_distance_from_food_in_direction(head_point, deltax[i], deltay[i])
-            dist /= normalisation_factor
-            distances.append(dist)
-        
+        distances = [self.find_distance_from_food_in_direction(head_point, deltax[i], deltay[i]) for i in range(len(deltax))]
         distances = array(distances)
+        distances = distances / self.normalisation_factor
+        distances = reshape(distances, (8, 1))
         return distances
     
     def find_distance_from_food_in_direction(self, point, deltax, deltay):
@@ -206,7 +256,7 @@ class Snake:
 
         # base case
         if not (x_ >= 0 and y_ >= 0 and x_ < self.ground.columns and y_ < self.ground.rows):
-            return NINF
+            return -MAX_VALUE
         
         count = 0
         hit_food = False
@@ -220,7 +270,7 @@ class Snake:
 
         # if body doesn't come in way
         if not hit_food:
-            return Inf
+            return MAX_VALUE
 
         # if diagnal direction
         if abs(deltax) == 1 and abs(deltay) == 1:
@@ -228,10 +278,16 @@ class Snake:
         
         return count
     
+    def get_food_features(self):
+        pos = array(self.food.get_current_position())
+        pos = reshape(pos, (2, 1))
+        pos = pos / self.normalisation_factor
+        return pos
+        
 
     def find_distances_from_body(self):
         head_point = self.find_end_point(self.body[0])
-        normalisation_factor = sqrt(pow(self.ground.rows, 2) + pow(self.ground.columns, 2))
+        normalisation_factor = MAX_VALUE    # donot change
 
         distances = []
 
@@ -240,10 +296,11 @@ class Snake:
 
         for i in range(len(deltax)):
             dist = self.find_distance_from_body_in_direction(head_point, deltax[i], deltay[i])
-            dist /= normalisation_factor
+            dist /= normalisation_factor    # donot change
             distances.append(dist)
         
         distances = array(distances)
+        distances = reshape(distances, (8, 1))
         return distances
 
     def find_distance_from_body_in_direction(self, point, deltax, deltay):
@@ -251,7 +308,7 @@ class Snake:
 
         # base case
         if not (x_ >= 0 and y_ >= 0 and x_ < self.ground.columns and y_ < self.ground.rows):
-            return NINF
+            return -MAX_VALUE
 
         count = 0
         hit_body = False
@@ -265,7 +322,7 @@ class Snake:
 
         # if body doesn't come in way
         if not hit_body:
-            return Inf
+            return MAX_VALUE
 
         # if diagnal direction
         if abs(deltax) == 1 and abs(deltay) == 1:
@@ -275,30 +332,22 @@ class Snake:
 
 
     def find_distances_from_walls(self):
-        head = self.body[0]
-        head_point = self.find_end_point(head)
-        normalisation_factor = sqrt(pow(self.ground.rows, 2) + pow(self.ground.columns, 2))
-
-        distances = []
+        head_point = self.find_end_point(self.body[0])
 
         deltax = (-1, -1, -1, 0, 0, 1, 1, 1)
         deltay = (-1, 0, 1, -1, 1, -1, 0, 1)
 
-        for i in range(len(deltax)):
-            dist = self.find_distance_from_wall_in_direction(head_point, deltax[i], deltay[i])
-            dist /= normalisation_factor
-            distances.append(dist)
+        distances = [self.find_distance_from_wall_in_direction(head_point, deltax[i], deltay[i]) for i in range(len(deltax))]
         distances = array(distances)
-        
-        is_outside = (distances == NINF)
-        if any(is_outside):
-            self.game_over = True
+        distances = distances / self.normalisation_factor
 
+        distances = reshape(distances, (8, 1))
         return distances
 
     def find_distance_from_wall_in_direction(self, point, deltax, deltay):
         x_, y_ = point
 
+        # if head outside the grid then return negative distance
         if not self.ground.is_inside_grid(x_, y_):
             return NINF
 
