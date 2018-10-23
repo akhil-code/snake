@@ -11,11 +11,7 @@ class Individual:
             self.nn = NeuralNetwork(layers=layers, weights=weights)
     
     def find_fitness(self):
-        # return ceil(0.995*self.snake.score + 0.005*self.snake.time)
-        delta = array(self.snake.closest_distance)
-        L = self.snake.normalisation_factor
-        return sum(ravel((1 - (delta/L)))) + self.snake.score
-
+        return self.snake.score
 
 class Population:
     def __init__(self, pop_size=1000, mutate_prob=0.03, retain_unfit_prob=0.01, select=0.333, layers=None):
