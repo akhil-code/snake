@@ -1,5 +1,5 @@
 import pygame
-from numpy import array, random, reshape, ravel, argmax
+from numpy import array, random, reshape, ravel
 
 from genetic import Population
 from objects import Color, Direction, Ground, Snake
@@ -14,7 +14,7 @@ class Game:
         return Game.__instance__
 
     def __init__(self):
-        self.frame_rate = 1000        # FPS
+        self.frame_rate = 1000       # FPS
         self.frames = 0              # counts number of frames elapsed
         self.exit = False            # Flag to exit the game
         self.manual = False
@@ -25,7 +25,7 @@ class Game:
         pygame.init()
 
         # initializing game objects
-        self.population = Population(layers=(16, 16, 4))
+        self.population = Population(layers=(6, 6, 6, 6, 6, 3))
 
         # screen params
         icon = pygame.image.load(icon_filename)
@@ -53,11 +53,10 @@ class Game:
                     # get feature vector
                     X = snake.get_features()
                     # print(ravel(X))
-                    y = ravel(reshape(individual.nn.feed_forward(X), (1,4)))
-                    index = argmax(y)
-                    directions = Direction.get_all_directions()
-                    if y[index] > 0.5:
-                        snake.move(directions[index])
+                    
+                    # output of feed forward of neural network
+                    y = ravel(individual.nn.feed_forward(X))
+                    snake.respond(y)
 
                     # capture user input
                     self.capture_input(snake)
@@ -85,12 +84,15 @@ class Game:
                         snake.move(Direction.LEFT)
                     elif event.key == pygame.K_RIGHT:
                         snake.move(Direction.RIGHT)
+                if event.key == pygame.K_u:
+                    self.frame_rate = 1000
                 if event.key == pygame.K_i:
-                    self.frame_rate += 100
+                    self.frame_rate = 100
                 if event.key == pygame.K_o:
-                    self.frame_rate -= 100
-                    if self.frame_rate <= 0:
-                        self.frame_rate = 5
+                    self.frame_rate = 10
+                if event.key == pygame.K_p:
+                    self.frame_rate = 1
+                
                 if event.key == pygame.K_q:
                     snake.game_over = True
 
