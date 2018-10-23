@@ -14,7 +14,7 @@ class Individual:
         return self.snake.score
 
 class Population:
-    def __init__(self, pop_size=1000, mutate_prob=0.03, retain_unfit_prob=0.01, select=0.333, layers=None):
+    def __init__(self, pop_size=50, mutate_prob=0.03, retain_unfit_prob=0.01, select=0.333, layers=None):
         self.pop_size = pop_size
         self.mutate_prob = mutate_prob
         self.retain_unfit_prob = retain_unfit_prob

@@ -25,7 +25,7 @@ class Game:
         pygame.init()
 
         # initializing game objects
-        self.population = Population(layers=(6, 6, 6, 6, 3))
+        self.population = Population(layers=(6, 6, 6, 6, 6, 3))
 
         # screen params
         icon = pygame.image.load(icon_filename)
@@ -84,12 +84,15 @@ class Game:
                         snake.move(Direction.LEFT)
                     elif event.key == pygame.K_RIGHT:
                         snake.move(Direction.RIGHT)
+                if event.key == pygame.K_u:
+                    self.frame_rate = 1000
                 if event.key == pygame.K_i:
-                    self.frame_rate += 100
+                    self.frame_rate = 100
                 if event.key == pygame.K_o:
-                    self.frame_rate -= 100
-                    if self.frame_rate <= 0:
-                        self.frame_rate = 5
+                    self.frame_rate = 10
+                if event.key == pygame.K_p:
+                    self.frame_rate = 1
+                
                 if event.key == pygame.K_q:
                     snake.game_over = True
 

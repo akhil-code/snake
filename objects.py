@@ -179,6 +179,7 @@ class Snake:
         ))
 
         distances = reshape(distances, (3, 1))
+        distances = distances / self.ground.diagonal
         return distances
     
     def get_free_distance_in_direction(self, direction, point):
