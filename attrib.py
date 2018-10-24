@@ -14,10 +14,12 @@ class Game:
         return Game.__instance__
 
     def __init__(self):
-        self.frame_rate = 1000       # FPS
+        self.frame_rate = 10000       # FPS
         self.frames = 0              # counts number of frames elapsed
         self.exit = False            # Flag to exit the game
+        self.pause = False
         self.manual = False
+        self.screen_on = True
         title = 'Snake'         # Window Title
         icon_filename = 'res/icon.png'
 
@@ -25,7 +27,7 @@ class Game:
         pygame.init()
 
         # initializing game objects
-        self.population = Population(layers=(6, 6, 6, 6, 6, 3))
+        self.population = Population(layers=(18, 24, 3))
 
         # screen params
         icon = pygame.image.load(icon_filename)
@@ -43,6 +45,12 @@ class Game:
             for individual in self.population.individuals:
                 snake = individual.snake
                 while not self.exit and not snake.game_over:
+                    # capture user input
+                    self.capture_input(snake)
+
+                    if self.pause:
+                        continue
+
                     # update objects for each frame
                     self.update_objects(snake)
 
@@ -58,16 +66,15 @@ class Game:
                     y = ravel(individual.nn.feed_forward(X))
                     snake.respond(y)
 
-                    # capture user input
-                    self.capture_input(snake)
-                    # draw objects on screen
-                    self.draw_objects(snake)
+                    
+                    if self.screen_on:
+                        # draw objects on screen
+                        self.draw_objects(snake)
                 # print(individual.nn.weights)
             self.population.evolve()
 
     
     def update_objects(self, snake):
-        self.clock.tick(self.frame_rate)
         snake.update()
     
     def capture_input(self, snake):
@@ -84,8 +91,14 @@ class Game:
                         snake.move(Direction.LEFT)
                     elif event.key == pygame.K_RIGHT:
                         snake.move(Direction.RIGHT)
+                
+                # keys to control frame rate
+                # u: 10000
+                # i: 100
+                # o: 10
+                # p: 1
                 if event.key == pygame.K_u:
-                    self.frame_rate = 1000
+                    self.frame_rate = 10000
                 if event.key == pygame.K_i:
                     self.frame_rate = 100
                 if event.key == pygame.K_o:
@@ -93,11 +106,24 @@ class Game:
                 if event.key == pygame.K_p:
                     self.frame_rate = 1
                 
+                # on pressing q current snake's game is over
                 if event.key == pygame.K_q:
                     snake.game_over = True
+                
+                # s: draws screen
+                # a: stops drawing on screen
+                if event.key == pygame.K_a:
+                    self.screen_on = False
+                if event.key == pygame.K_s:
+                    self.screen_on = True
+                
+                # k: toggles pause
+                if event.key == pygame.K_k:
+                    self.pause = not self.pause
 
     def draw_objects(self, snake):
         self.screen.fill(Color.BLACK)
         snake.draw(self.screen)
         pygame.display.update()
+        self.clock.tick(self.frame_rate)
         

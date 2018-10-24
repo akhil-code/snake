@@ -10,11 +10,17 @@ class Direction(Enum):
     RIGHT = 1
     UP = 2
     DOWN = 3
+    LEFT_UP = 4
+    LEFT_DOWN = 5
+    RIGHT_UP = 6
+    RIGHT_DOWN = 7
+    
+    
 
     def get_opposite_direction(direction):
         if direction == Direction.UP:
             return Direction.DOWN
-        elif direction == Direction.DOWN:
+        elif direction == Direction.DOWN: 
             return Direction.UP
         elif direction == Direction.LEFT:
             return Direction.RIGHT
@@ -30,6 +36,59 @@ class Direction(Enum):
             return Direction.DOWN
         elif direction == Direction.RIGHT:
             return Direction.UP
+    
+    def get_relative_directions(current_direction):
+        # all directions here are relative to snake
+        directions = []
+        reverse_direction = Direction.get_opposite_direction(current_direction)
+        left_direction = Direction.get_direction_to_left(current_direction)
+        right_direction = Direction.get_opposite_direction(left_direction)
+        left_up_direction = Direction.combine(left_direction, current_direction)
+        left_down_direction = Direction.combine(left_direction, reverse_direction)
+        right_up_direction = Direction.combine(right_direction, current_direction)
+        right_down_direction = Direction.combine(right_direction, reverse_direction)
+
+        directions.append(current_direction)
+        directions.append(left_direction)
+        directions.append(right_direction)
+        directions.append(left_up_direction)
+        directions.append(left_down_direction)
+        directions.append(right_up_direction)
+        directions.append(right_down_direction)
+
+        return directions
+    
+    def get_relative_deltas(current_direction):
+        directions = Direction.get_relative_directions(current_direction)
+    
+        DELTAS = {
+            Direction.LEFT : (-1, 0),
+            Direction.RIGHT : (1, 0),
+            Direction.UP : (0, -1),
+            Direction.DOWN : (0, 1),
+            Direction.LEFT_UP : (-1, -1),
+            Direction.LEFT_DOWN : (-1, 1),
+            Direction.RIGHT_UP : (1, -1),
+            Direction.RIGHT_DOWN : (1, 1),
+        }
+
+        deltas = []
+        for direction in directions:
+            deltas.append(DELTAS[direction])
+        return deltas
+
+    def combine(dir1, dir2):
+        if dir1 == Direction.LEFT or dir2 == Direction.LEFT:
+            if dir1 == Direction.UP or dir2 == Direction.UP:
+                return Direction.LEFT_UP
+            elif dir1 == Direction.DOWN or dir2 == Direction.DOWN:
+                return Direction.LEFT_DOWN
+        elif dir1 == Direction.RIGHT or dir2 == Direction.RIGHT:
+            if dir1 == Direction.UP or dir2 == Direction.UP:
+                return Direction.RIGHT_UP
+            elif dir1 == Direction.DOWN or dir2 == Direction.DOWN:
+                return Direction.RIGHT_DOWN
+
 
 class Color:
     RED = (255,0,0)
@@ -161,56 +220,82 @@ class Snake:
         
         # features for snake's neural network
         self.features = concatenate((
-            self.get_distance_features(),
+            self.get_wall_distances(),
+            self.get_body_distances(),
             self.get_food_features(),
         ))
     
-    def get_distance_features(self):
+    
+    def get_wall_distances(self):
         head = self.body[0]
-        point = self.find_end_point(head)
-        current_direction = head['direction']
-        left_direction = Direction.get_direction_to_left(current_direction)
-        right_direction = Direction.get_opposite_direction(left_direction)
+        deltas = Direction.get_relative_deltas(head['direction'])
 
-        distances = array((
-            self.get_free_distance_in_direction(current_direction, point),
-            self.get_free_distance_in_direction(left_direction, point),
-            self.get_free_distance_in_direction(right_direction, point),
-        ))
-
-        distances = reshape(distances, (3, 1))
+        distances = [self.find_wall_distance_in_direction(head, delta) for delta in deltas]
+        distances = array(distances)
         distances = distances / self.ground.diagonal
+        distances = reshape(distances, (len(deltas), 1))
         return distances
     
-    def get_free_distance_in_direction(self, direction, point):
-        x_, y_ = point
-        distance = 0
 
-        while self.ground.is_inside_grid(*point):
-            if direction == Direction.LEFT:
-                x_ -= 1
-            elif direction == Direction.RIGHT:
-                x_ += 1
-            elif direction == Direction.UP:
-                y_ -= 1
-            elif direction == Direction.DOWN:
-                y_ += 1
-            
-            if self.ground.is_inside_grid(x_, y_) and self.ground.grid[y_][x_] != 1:
-                distance += 1
+    def find_wall_distance_in_direction(self, head, delta):
+        x_, y_ = self.find_end_point(head)
+        deltax, deltay = delta
+        distance = 0
+        while True:
+            x_ += deltax
+            y_ += deltay
+            if self.ground.is_inside_grid(x_, y_):
+                if abs(deltax) == 1 and abs(deltay) == 1:
+                    distance += sqrt(2)
+                else:
+                    distance += 1
             else:
                 return distance
+        return distance
+    
+    def get_body_distances(self):
+        head = self.body[0]
+        deltas = Direction.get_relative_deltas(head['direction'])
+
+        distances = [self.find_body_distance_in_direction(head, delta) for delta in deltas]
+        distances = array(distances)
+        print(ravel(distances))
+        distances = distances / self.ground.diagonal
+        distances = reshape(distances, (len(deltas), 1))
+        return distances
+    
+    def find_body_distance_in_direction(self, head, delta):
+        x_, y_ = self.find_end_point(head)
+        deltax, deltay = delta
+        distance = 0
+        while True:
+            x_ += deltax
+            y_ += deltay
+            if self.ground.is_inside_grid(x_, y_):
+                if self.ground.grid[y_][x_] != 1:
+                    if abs(deltax) == 1 and abs(deltay) == 1:
+                        distance += sqrt(2)
+                    else:
+                        distance += 1
+                else:
+                    return distance
+            else:
+                return self.ground.diagonal
+        return distance
     
     def get_food_features(self):
+        """ features = (front, left, right, back) """
         if self.is_food_ahead():
-            features = (1, 0, 0)
+            features = (1, 0, 0, 0)
         elif self.is_food_to_left(self.body[0]['direction']):
-            features = (0, 1, 0)
+            features = (0, 1, 0, 0)
+        elif self.is_food_to_right(self.body[0]['direction']):
+            features = (0, 0, 1, 0)
         else:
-            features = (0, 0, 1)
+            features = (0, 0, 0, 1)
         
         features = array(features)
-        features = reshape(features, (3, 1))
+        features = reshape(features, (len(features), 1))
         return features
 
     def is_food_ahead(self):
@@ -249,6 +334,25 @@ class Snake:
                 return True
         elif direction == Direction.DOWN:
             if xf > xs:
+                return True
+
+        return False
+    
+    def is_food_to_right(self, direction):
+        xf, yf = self.food.get_current_position()       # food position
+        xs, ys = self.find_end_point(self.body[0])      # snake position
+
+        if direction == Direction.LEFT:
+            if yf < ys:
+                return True
+        elif direction == Direction.RIGHT:
+            if yf > ys:
+                return True
+        elif direction == Direction.UP:
+            if xf > xs:
+                return True
+        elif direction == Direction.DOWN:
+            if xf < xs:
                 return True
 
         return False
