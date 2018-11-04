@@ -28,7 +28,7 @@ class Game:
         pygame.init()
 
         # initializing game objects
-        self.population = Population(layers=(18, 24, 3))
+        self.population = Population(layers=(12, 16, 16, 3))
 
         # screen params
         icon = pygame.image.load(icon_filename)
@@ -57,11 +57,12 @@ class Game:
 
                     # if game over skip
                     if snake.game_over:
-                        continue
+                        distance_from_food = snake.delta_distance
+                        snake.score -= distance_from_food
+                        break
 
                     # get feature vector
                     X = snake.get_features()
-                    # print(ravel(X))
                     
                     # output of feed forward of neural network
                     y = ravel(individual.nn.feed_forward(X))

@@ -14,7 +14,7 @@ class Individual:
         return self.snake.score
 
 class Population:
-    def __init__(self, pop_size=50, mutate_prob=0.03, retain_unfit_prob=0.01, select=0.333, layers=None):
+    def __init__(self, pop_size=20, mutate_prob=0.03, retain_unfit_prob=0.01, select=0.333, layers=None):
         self.pop_size = pop_size
         self.mutate_prob = mutate_prob
         self.retain_unfit_prob = retain_unfit_prob
@@ -80,5 +80,6 @@ class Population:
         self.select_parents()
         self.breed()
 
-        print(f'{self.generation}  --> {self.fitness_history[-1]}') 
+        if self.generation % 10 == 0:
+            print(f'{self.generation}  --> {self.fitness_history[-1]/1000}') 
         self.generation += 1

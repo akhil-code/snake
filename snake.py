@@ -8,9 +8,11 @@ from numpy import array, concatenate, int32, random, ravel, reshape, zeros, argm
 
 class Snake:
     def __init__(self):
-        self.score = 0                  
+        self.score = 0
+        self.movement_score = 0
+        self.items_consumed = 0                  
         self.game_over = False
-        self.min_score = -1000
+        self.threshold_movement_score = -25
 
         # ground objects
         self.ground = Ground()
@@ -82,15 +84,17 @@ class Snake:
         # if food is consumed, then increase the length of head by two and mark the grid as well
         # then find new position for food
         if self.consumed_food():
+            self.items_consumed += 1
             self.score += self.food.value
-            for i in range(self.food.delta_increase):
-                self.body[0]['length'] += 1
-                self.mark_ground((self.find_end_point(self.body[0])), 1)
+            # increases the length of snake body
+            self.body[0]['length'] += 1
+            self.mark_ground((self.find_end_point(self.body[0])), 1)
+            # set new position for food
             self.food.get_new_position(self.ground)
 
         # check if head of snake lies inside the grid
         head_point = self.find_end_point(self.body[0])
-        if not self.ground.is_inside_grid(*head_point) or self.score < self.min_score:
+        if not self.ground.is_inside_grid(*head_point) or self.movement_score < self.threshold_movement_score:
             self.game_over = True
             return
 
@@ -100,24 +104,24 @@ class Snake:
             self.food.get_current_position(),
             self.find_end_point(self.body[0])
         )
-
         if current_delta_distance < self.delta_distance:
-            self.score += 1
+            self.movement_score += 1
         else:
-            self.score -= 1.5
+            self.movement_score -= 1.5
+
         self.delta_distance = current_delta_distance
         
         # features for snake's neural network
         self.features = concatenate((
             self.get_wall_distances(),
             self.get_body_distances(),
-            self.get_food_features(),
+            self.get_food_distances(),
         ))
     
     
     def get_wall_distances(self):
         head = self.body[0]
-        deltas = Direction.get_relative_deltas(head['direction'])
+        deltas = Direction.get_relative_deltas(head['direction'])[:3]
 
         distances = [self.find_wall_distance_in_direction(head, delta) for delta in deltas]
         distances = array(distances)
@@ -171,82 +175,29 @@ class Snake:
             else:
                 return -self.ground.diagonal
         return distance
-    
-    def get_food_features(self):
-        """ features = (front, left, right, back) """
-        if self.is_food_ahead():
-            features = (1, 0, 0, 0)
-        elif self.is_food_to_left(self.body[0]['direction']):
-            features = (0, 1, 0, 0)
-        elif self.is_food_to_right(self.body[0]['direction']):
-            features = (0, 0, 1, 0)
-        else:
-            features = (0, 0, 0, 1)
-        
-        features = array(features)
-        features = reshape(features, (len(features), 1))
-        return features
 
-    def is_food_ahead(self):
+    def get_food_distances(self):
         head = self.body[0]
-        x_, y_ = self.find_end_point(head)
         direction = head['direction']
+        xs, ys = self.find_end_point(head)
+        xf, yf = self.food.get_current_position()
 
-        while self.ground.is_inside_grid(x_, y_):
-            if direction == Direction.LEFT:
-                x_ -= 1
-            elif direction == Direction.RIGHT:
-                x_ += 1
-            elif direction == Direction.UP:
-                y_ -= 1
-            elif direction == Direction.DOWN:
-                y_ += 1
-            
-            if self.ground.is_inside_grid(x_, y_):
-                if self.food.get_current_position == (x_, y_):
-                    return True
-            else:
-                return False
+        if direction == Direction.UP or direction == Direction.DOWN:
+            delta_v = yf - ys
+            delta_h = xf - xs
+        elif direction == Direction.LEFT or direction == Direction.RIGHT:
+            delta_v = xf - xs
+            delta_h = yf - ys
+        
+        if direction == Direction.DOWN or direction == Direction.RIGHT:
+            delta_v = -delta_v
+            delta_h = -delta_h
+        
+        distances = array((delta_v, delta_h))
+        distances = distances / self.ground.diagonal
+        distances = reshape(distances, (len(distances), 1))
+        return distances
     
-    def is_food_to_left(self, direction):
-        xf, yf = self.food.get_current_position()       # food position
-        xs, ys = self.find_end_point(self.body[0])      # snake position
-
-        if direction == Direction.LEFT:
-            if yf > ys:
-                return True
-        elif direction == Direction.RIGHT:
-            if yf < ys:
-                return True
-        elif direction == Direction.UP:
-            if xf < xs:
-                return True
-        elif direction == Direction.DOWN:
-            if xf > xs:
-                return True
-
-        return False
-    
-    def is_food_to_right(self, direction):
-        xf, yf = self.food.get_current_position()       # food position
-        xs, ys = self.find_end_point(self.body[0])      # snake position
-
-        if direction == Direction.LEFT:
-            if yf < ys:
-                return True
-        elif direction == Direction.RIGHT:
-            if yf > ys:
-                return True
-        elif direction == Direction.UP:
-            if xf > xs:
-                return True
-        elif direction == Direction.DOWN:
-            if xf < xs:
-                return True
-
-        return False
-
-
     def find_distance(self, p1, p2):
         """ find's euclidean distance between two points """
         x1, y1 = p1

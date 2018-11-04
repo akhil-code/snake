@@ -6,7 +6,6 @@ from numpy import array, concatenate, int32, random, ravel, reshape, zeros, argm
 
 
 class Ground:
-
     def __init__(self):
         # pixel dimensions
         self.width = 640
@@ -53,8 +52,7 @@ class Ground:
 
 class Food:
     def __init__(self):
-        self.value = 100        # score increased upon consuming it
-        self.delta_increase = 2 # increase in length of snake upon consumption of food
+        self.value = 1000        # score increased upon consuming it
 
     def get_new_position(self, ground):
         """ finds new poisition for food on ground that's free """

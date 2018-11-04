@@ -1,5 +1,5 @@
 import pygame
-from attrib import Game
+from game import Game
 
 def main():
     Game.get_instance().loop()
