@@ -279,8 +279,9 @@ class Snake:
                         distance += 1
                 else:
                     return distance
+            # if it doesn't hits its body in this direction
             else:
-                return self.ground.diagonal
+                return -self.ground.diagonal
         return distance
     
     def get_food_features(self):
