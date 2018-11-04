@@ -2,8 +2,9 @@ import pygame
 from numpy import array, random, reshape, ravel
 
 from genetic import Population
-from objects import Color, Direction, Ground, Snake
-
+from objects import Ground
+from utilities import Direction, Color
+from snake import Snake
 
 class Game:
     __instance__ = None
